@@ -1,5 +1,5 @@
 # python3.7
-"""Edits latent codes with respect to given boundary.
+"""Edits latent codes with respect to given neural net.
 
 Basically, this file takes latent codes and a semantic boundary as inputs, and
 then shows how the image synthesis will change if the latent codes is moved
@@ -25,7 +25,6 @@ from models.pggan_generator import PGGANGenerator
 from models.stylegan_generator import StyleGANGenerator
 from models.stylegan2_generator import StyleGAN2Generator
 from utils.logger import setup_logger
-from utils.manipulator import linear_interpolate
 from utils.nl_manipulator import nonlinear_interpolate
 
 
@@ -51,7 +50,6 @@ def parse_args():
   parser.add_argument('-s', '--latent_space_type', type=str, default='z',
                       choices=['z', 'Z', 'w', 'W', 'wp', 'wP', 'Wp', 'WP'],
                       help='Latent space used in Style GAN. (default: `Z`)')
-
   parser.add_argument('--end_distance', type=float, default=3.0,
                       help='End point for manipulation in latent space. '
                            '(default: 3.0)')
@@ -81,13 +79,10 @@ def main():
   else:
     raise NotImplementedError(f'Not implemented GAN type `{gan_type}`!')
 
-  logger.info(f'Preparing boundary.')
-  if not os.path.isfile(args.boundary_path):
-    raise ValueError(f'Boundary `{args.boundary_path}` does not exist!')
-  boundary = np.load(args.boundary_path)
-  np.save(os.path.join(args.output_dir, 'boundary.npy'), boundary)
-
-  
+  logger.info(f'Preparing classifier.')
+  if not os.path.isfile(args.latent_classifier):
+    raise ValueError(f'Neural net latent classifier pickle `{args.latent_classifier}` does not exist!')
+  lclass=torch.load(args.latent_classifier) 
 
 
   logger.info(f'Preparing latent codes.')
@@ -103,16 +98,15 @@ def main():
 
   logger.info(f'Editing {total_num} samples.')
   for sample_id in tqdm(range(total_num), leave=False):
-    interpolations = linear_interpolate(latent_codes[sample_id:sample_id + 1],
-                                        boundary,
-                                        start_distance=args.start_distance,
+    interpolations = nonlinear_interpolate(latent_codes[sample_id:sample_id + 1],
+                                        lclass,
                                         end_distance=args.end_distance,
                                         steps=args.steps)
     interpolation_id = 0
     for interpolations_batch in model.get_batch_inputs(interpolations):
       if gan_type == 'pggan':
         outputs = model.easy_synthesize(interpolations_batch)
-      elif gan_type == 'stylegan':
+      elif gan_type == 'stylegan' or gan_type == 'stylegan2':
         outputs = model.easy_synthesize(interpolations_batch, **kwargs)
       for image in outputs['image']:
         save_path = os.path.join(args.output_dir,

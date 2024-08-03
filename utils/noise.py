@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 import os
 import torch
 import torch.nn as nn
@@ -6,6 +7,27 @@ from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 from sklearn.metrics import accuracy_score
 from torchvision import transforms
+
+class NoiseDataset(Dataset):
+
+  def __init__(self,file_name,start_column=1,latent_size=512):
+    noise_df=pd.read_csv(file_name).iloc[:,start_column:]
+    self.latent_size=latent_size
+    self.init_params(df=noise_df)
+
+
+  def init_params(self,df):
+    self.noise_df=df
+    self.x=self.noise_df.iloc[:,0:self.latent_size].values
+
+    self.y=self.noise_df.iloc[:].label.values
+
+
+  def __len__(self):
+    return len(self.x)
+
+  def __getitem__(self,idx):
+    return self.x[idx],self.y[idx]
 
 
 class NoiseClassifier(nn.Module):
@@ -130,7 +152,8 @@ class NNBoundary(nn.Module):
         logits = self.linear_elu_stack(x)
         return logits
     
-
+    def set_name(self, name):
+        self.name = name
     def save_pkl(self, base_path='late_models/'):
         name= f'{self.name}_{self.hidden_l}_{self.hidden_n}.pkl'        
         torch.save(self,os.path.join(base_path, name))
@@ -142,18 +165,16 @@ class PolyBoundary:
     Attributes:
         X (np.array): Array of latent codes.
         Y (np.array): Array of scores corresponding to the latent codes.
-        boundary_path (str): Path to save the trained boundary.
-        degree (int): Degree of the polynomial boundary.
+        out_path (str): Path to save the trained Network.        
         split_ratio (float): Ratio to split the training and validation sets.
         chosen_num_or_ratio (float): Number or ratio of samples chosen for training.
         invalid_value (float): Value to filter invalid samples.
     """
 
-    def __init__(self, X, Y, boundary_path='./gen_boundary', degree=2, split_ratio=0.7, chosen_num_or_ratio=0.8, invalid_value=None):
+    def __init__(self, X, Y, split_ratio=0.7, chosen_num_or_ratio=0.8, invalid_value=None):
         self.x = X  # shape: (n_samples, n_features)
         self.boundary_shape = (1, X.shape[1])
         self.y = Y  # shape: (n_samples,)
-        self.degree = degree
         self.invalid_value = invalid_value
         self.split_ratio = split_ratio
         self.chosen_num_or_ratio = chosen_num_or_ratio
