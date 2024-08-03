@@ -1,6 +1,20 @@
 # python3.7
+"""
+Manipulates the latent code to frontalize the generated face.
+
+This file loads an initial latent code and a pre-trained neural
+network classifier that predicts whether the corresponding face's 
+yaw angle is positive or negative on a scale of -90 to 90 degrees. 
+It uses these components to iteratively adjust the latent code 
+so that the final generated face is frontalized. The neural 
+network's gradient with respect to the input latent codes guides 
+the manipulation process. Optionally, a saved boundary for yaw 
+editing can also be used. The final adjusted latent code, which 
+generates a frontalized face, is saved for further use.
+"""
 
 import os.path
+import torch
 import argparse
 from collections import defaultdict
 import cv2
@@ -19,12 +33,12 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Generate images with given model and frontalize latent code.')
     parser.add_argument('-m', '--model_name', type=str, required=True,
                         choices=list(MODEL_POOL),
-                        help='Name of the model for generation. (required)')
+                        help='Name of the model for image generation. (required)')
     parser.add_argument('-o', '--output_dir', type=str, required=True,
                         help='Directory to save the output results. (required)')
     parser.add_argument('-l', '--latent_code_path', type=str, required=True,
                         help='Path to the initial latent code (.npy file). (required)')
-    parser.add_argument('-b', '--boundary_path', type=str, required=True,
+    parser.add_argument('-b', '--boundary_path', type=str, default=None,
                         help='Path to the saved boundary for editing yaw (.npy file). (required)')
     parser.add_argument('-s', '--latent_space_type', type=str, default='z',
                         choices=['z', 'Z', 'w', 'W', 'wp', 'wP', 'Wp', 'WP'],
@@ -33,8 +47,8 @@ def parse_args():
                         help='Threshold for yaw angle to consider the image as frontal. (default: 4.0)')
     parser.add_argument('-i', '--max_iter', type=int, default=10,
                         help='Maximum number of iterations for adjustment. (default: 10)')
-    parser.add_argument('-p', '--img_classifier', required=True,
-                        help='Path to pre-trained image classifier .PKL file for generating labels.')
+    parser.add_argument('-c', '--latent_classifier', required=True,
+                        help='Path to pre-trained latent classifier .PKL file for using its gradient.')
 
     return parser.parse_args()
 
@@ -63,9 +77,12 @@ def main():
     logger.info(f'Loading initial latent code from {args.latent_code_path}.')
     initial_latent = np.load(args.latent_code_path)
 
+    logger.info(f'Loading yaw latent classifier from {args.latent_classifier}.')
+    nn=torch.load(args.latent_classifier)
     # Load the yaw boundary
-    logger.info(f'Loading yaw boundary from {args.boundary_path}.')
-    yaw_bound = np.load(args.boundary_path)
+    if not (args.boundary_path is None):
+        logger.info(f'Loading yaw boundary from {args.boundary_path}.')
+        yaw_bound = np.load(args.boundary_path)
 
 
     # Perform frontalization
@@ -74,6 +91,7 @@ def main():
         start_latent=initial_latent,
         yaw_predict=predict_yaw,
         yaw_bound=yaw_bound,
+        yaw_classifier=nn,
         generator=model,
         synthesis_kwargs=kwargs,
         max_iter=args.max_iter,

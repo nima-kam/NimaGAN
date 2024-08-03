@@ -55,14 +55,15 @@ def predict_yaw(pos_imgs,concat=True,to_np=True,move_ax=True):
     return torch.Tensor(yaw).reshape(-1,1)
 
 
-def frontalize_latent(start_latent, yaw_predict, yaw_bound, generator, synthesis_kwargs, max_iter=10, yaw_thresh=4):
+def frontalize_latent(start_latent, yaw_predict, yaw_bound, yaw_classifier, generator, synthesis_kwargs, max_iter=10, yaw_thresh=4):
     """
     Adjust the latent code to achieve a frontal view in the generated image.
 
     Args:
         start_latent (np.array): The starting latent code.
         yaw_predict (callable): Function to predict yaw angle from the image.
-        yaw_bound (np.array): The boundary direction for yaw adjustment.
+        yaw_bound (np.array): The linear boundary direction for yaw adjustment.
+        yaw_classifier (nn.Module): The trained model for classification of latent codes.
         generator (object): The generator model to synthesize images.
         synthesis_kwargs (dict): Additional arguments for image synthesis.
         max_iter (int): Maximum number of iterations for adjustment. Default is 10.
@@ -79,6 +80,7 @@ def frontalize_latent(start_latent, yaw_predict, yaw_bound, generator, synthesis
     cur_latent = start_latent
     latent_list = [cur_latent]
 
+
     # Generate the initial image from the start latent code
     start_img = generator.easy_synthesize(start_latent, **synthesis_kwargs)['image']
 
@@ -87,14 +89,19 @@ def frontalize_latent(start_latent, yaw_predict, yaw_bound, generator, synthesis
     yaw_list = [cur_yaw]
 
     while abs(cur_yaw) > yaw_thresh:
-        # Determine the direction of adjustment based on the current yaw
-        if cur_yaw > 0:
-            m = -1
-        else:
-            m = 1
+        if yaw_classifier is None:
+            # Determine the direction of adjustment based on the current yaw
+            if cur_yaw > 0:
+                m = -1
+            else:
+                m = 1
 
-        # Adjust the latent code in the direction to reduce the yaw
-        cur_latent += yaw_bound * m
+            # Adjust the latent code in the direction to reduce the yaw
+            cur_latent += yaw_bound * m
+        
+        else:
+           cur_latent = apply_manipulation(cur_latent, yaw_classifier, multiplier=m, steps=1)
+
 
         # Generate a new image from the adjusted latent code
         cur_img = generator.easy_synthesize(cur_latent, **synthesis_kwargs)['image']
