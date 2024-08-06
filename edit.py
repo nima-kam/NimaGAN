@@ -1,9 +1,9 @@
 # python3.7
 """Edits latent codes with respect to given neural net.
 
-Basically, this file takes latent codes and a semantic boundary as inputs, and
+Basically, this file takes latent codes and a latent classifier as inputs, and
 then shows how the image synthesis will change if the latent codes is moved
-towards the given boundary.
+towards the given classifiers gradient.
 
 NOTE: If you want to use W or W+ space of StyleGAN, please do not randomly
 sample the latent code, since neither W nor W+ space is subject to Gaussian

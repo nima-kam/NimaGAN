@@ -53,7 +53,7 @@ def parse_args():
   parser.add_argument('-C', '--generate_class', action='store_false',
                       help='If specified, will skip generating labels in '
                            'Style GAN. (default: generate label)')
-  parser.add_argument('-p', '--img_classifier', required=True,
+  parser.add_argument('-p', '--img_classifier', type=str, default=None,
                       help='path to pre-trained image classifier .PKL file for generating labels.')
 
   return parser.parse_args()
